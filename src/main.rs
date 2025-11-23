@@ -1,3 +1,8 @@
+mod storage;
+mod wal;
+mod engine;
+mod parser;
+
 fn main() {
-    println!("Hello, world!");
+    println!("Rust DBMS started");
 }
