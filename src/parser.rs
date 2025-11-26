@@ -91,19 +91,19 @@ impl Parser {
     fn parse_insert(&self, input: &str) -> Command {
         // Format: INSERT INTO table VALUES (val1, val2)
         let input_upper = input.to_uppercase();
-        let rest = match input_upper.strip_prefix("INSERT INTO") {
-            Some(r) => r.trim(),
-            None => return Command::Unknown(input.to_string()),
-        };
-
-        // Find VALUES keyword
-        let parts: Vec<&str> = rest.splitn(2, "VALUES").collect();
-        if parts.len() != 2 {
+        if !input_upper.starts_with("INSERT INTO") {
             return Command::Unknown(input.to_string());
         }
 
-        let table_name = parts[0].trim().to_string();
-        let values_str = parts[1].trim().trim_start_matches('(').trim_end_matches(')');
+        // Find VALUES keyword position (case-insensitive) in original input
+        let after_insert = &input[11..].trim_start(); // Skip "INSERT INTO" (11 chars)
+        let values_pos_original = match after_insert.to_uppercase().find("VALUES") {
+            Some(pos) => pos,
+            None => return Command::Unknown(input.to_string()),
+        };
+        
+        let table_name = after_insert[..values_pos_original].trim().to_string();
+        let values_str = after_insert[values_pos_original + 6..].trim().trim_start_matches('(').trim_end_matches(')');
 
         // Parse values - simple split by comma
         let values: Vec<String> = values_str
@@ -120,19 +120,20 @@ impl Parser {
     fn parse_select(&self, input: &str) -> Command {
         // Format: SELECT * FROM table
         let input_upper = input.to_uppercase();
-        let rest = match input_upper.strip_prefix("SELECT") {
-            Some(r) => r.trim(),
-            None => return Command::Unknown(input.to_string()),
-        };
-
-        // Find FROM keyword
-        let parts: Vec<&str> = rest.splitn(2, "FROM").collect();
-        if parts.len() != 2 {
+        if !input_upper.starts_with("SELECT") {
             return Command::Unknown(input.to_string());
         }
 
-        let columns_str = parts[0].trim();
-        let table_name = parts[1].trim().to_string();
+        // Find FROM keyword position (case-insensitive) in original input
+        let after_select = &input[6..].trim_start(); // Skip "SELECT" (6 chars)
+        let from_pos_original = match after_select.to_uppercase().find("FROM") {
+            Some(pos) => pos,
+            None => return Command::Unknown(input.to_string()),
+        };
+        
+        let after_from = &after_select[from_pos_original + 4..].trim_start();
+        let columns_str = after_select[..from_pos_original].trim();
+        let table_name = after_from.to_string();
 
         // Parse columns (for now, just support *)
         let columns: Vec<String> = if columns_str == "*" {

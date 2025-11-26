@@ -35,17 +35,38 @@ impl StorageEngine {
     }
 
     /// Reads one page with given ID
+    /// Returns a zero-filled page if the page doesn't exist yet
     pub fn read_page(&mut self, page_id: u64) -> Page {
         let mut page = Page::new(page_id);
 
         let offset = page_id * PAGE_SIZE as u64;
+        let file_len = self.file.metadata().unwrap().len();
+        
+        // If the page is beyond the file, return zero-filled page
+        if offset >= file_len {
+            return page;
+        }
+
         self.file
             .seek(SeekFrom::Start(offset))
             .expect("Seek failed");
 
-        self.file
-            .read_exact(&mut page.data)
-            .expect("Failed to read page");
+        // Read as much as we can, rest will be zeros
+        match self.file.read(&mut page.data) {
+            Ok(bytes_read) => {
+                // If we didn't read a full page, the rest is already zero-filled
+                if bytes_read < PAGE_SIZE {
+                    // Clear any remaining bytes (though they should already be zero)
+                    for i in bytes_read..PAGE_SIZE {
+                        page.data[i] = 0;
+                    }
+                }
+            }
+            Err(_) => {
+                // On error, return zero-filled page
+                // This handles cases where the file is truncated or corrupted
+            }
+        }
 
         page
     }
@@ -74,5 +95,10 @@ impl StorageEngine {
         self.write_page(&page);
 
         page
+    }
+
+    /// Get file metadata
+    pub fn file(&mut self) -> &mut File {
+        &mut self.file
     }
 }
