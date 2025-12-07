@@ -39,11 +39,11 @@ impl Catalog {
     }
 
     pub fn find_table_mut(&mut self, name: &str) -> Option<&mut Table> {
-        self.tables.iter_mut().find(|t| t.name == name)
+        self.tables.iter_mut().find(|t| t.name.to_lowercase() == name.to_lowercase())
     }
 
     pub fn find_table(&self, name: &str) -> Option<&Table> {
-        self.tables.iter().find(|t| t.name == name)
+        self.tables.iter().find(|t| t.name.to_lowercase() == name.to_lowercase())
     }
 
     pub fn list_tables(&self) -> Vec<&str> {
@@ -63,7 +63,7 @@ impl Catalog {
     }
     
     pub fn add_table(&mut self, table: Table) {
-        if !self.tables.iter().any(|t| t.name == table.name) {
+        if !self.tables.iter().any(|t| t.name.to_lowercase() == table.name.to_lowercase()) {
             self.tables.push(table);
         }
     }

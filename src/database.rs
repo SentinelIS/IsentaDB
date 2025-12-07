@@ -465,7 +465,7 @@ impl Database {
             let name = String::from_utf8(page.data[offset..offset + name_len].to_vec())
                 .map_err(|_| "Invalid table name encoding")?;
 
-            if name == table_name {
+            if name.to_lowercase() == table_name.to_lowercase() {
                 return Ok(Some(current_page_id));
             }
 
