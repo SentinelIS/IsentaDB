@@ -149,6 +149,21 @@ fn main() {
                     }
                 }
             }
+            
+            Command::InspectTable { name } => {
+                if let Some(table) = catalog.find_table(&name) {
+                    println!("Table: {}", name);
+                    println!("----------------");
+                    println!("{:<20} | {}", "Column", "Type");
+                    println!("{:-<20}-+-{:-<15}", "", "");
+                    
+                    for column in &table.columns {
+                        println!("{:<20} | {}", column.name, column.data_type);
+                    }
+                } else {
+                    println!("Table '{}' not found", name);
+                }
+            }
 
             Command::Unknown(cmd) => {
                 println!("Unknown command: {}", cmd);
@@ -163,6 +178,8 @@ fn print_help() {
     println!("  CREATE TABLE <table_name> (col1 TYPE, col2 TYPE, ...) - Create a new table");
     println!("  INSERT INTO <table_name> VALUES (val1, val2, ...) - Insert data into a table");
     println!("  SELECT * FROM <table_name> - Query data from a table");
+    println!("  INSPECT <table_name> - Show table schema and column types");
+    println!("  SHOW TABLES - List all tables in the database");
     println!("  help - Show this help message");
     println!("  exit | quit - Exit the program");
 }

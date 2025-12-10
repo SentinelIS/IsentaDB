@@ -13,6 +13,9 @@ pub enum Command {
         columns: Vec<String>, // For now, just support *
     },
     ShowTables,
+    InspectTable {
+        name: String,
+    },
     Unknown(String),
 }
 
@@ -41,6 +44,8 @@ impl Parser {
             self.parse_select(input)
         } else if input_upper.starts_with("SHOW TABLES") {
             Command::ShowTables
+        } else if input_upper.starts_with("INSPECT") {
+            self.parse_inspect(input)
         } else {
             Command::Unknown(input.to_string())
         }
@@ -151,6 +156,22 @@ impl Parser {
         Command::Select {
             table: table_name,
             columns,
+        }
+    }
+
+    fn parse_inspect(&self, input: &str) -> Command {
+        let input_upper = input.to_uppercase();
+        let rest = match input_upper.strip_prefix("INSPECT") {
+            Some(r) => r.trim(),
+            None => return Command::Unknown(input.to_string()),
+        };
+
+        if rest.is_empty() {
+            return Command::Unknown(input.to_string());
+        }
+
+        Command::InspectTable {
+            name: rest.to_string(),
         }
     }
 }
