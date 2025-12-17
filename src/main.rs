@@ -2,33 +2,18 @@ mod storage;
 mod parser;
 mod engine;
 mod database;
+mod wal;
 
 use std::io::{self, Write};
-use database::Database;
 use parser::{Command, Parser};
-use engine::Catalog;
+use engine::QueryEngine;
 
 fn main() {
     println!("IsentaDB v0.1.0");
     println!("Type 'help' for commands, 'exit' to quit\n");
 
-    // Initialize database
-    let mut db = match Database::new("data.db") {
-        Ok(db) => db,
-        Err(e) => {
-            eprintln!("Failed to initialize database: {}", e);
-            return;
-        }
-    };
-    
-    // Load catalog into memory
-    let mut catalog = match db.load_catalog() {
-        Ok(cat) => cat,
-        Err(e) => {
-            eprintln!("Failed to load catalog: {}", e);
-            Catalog::new()
-        }
-    };
+    // Initialize the query engine
+    let mut query_engine = QueryEngine::new();
     
     let parser = Parser::new();
 
@@ -70,88 +55,61 @@ fn main() {
         let command = parser.parse(input);
         match command {
             Command::CreateTable { name, columns } => {
-                // Check if table already exists
-                if catalog.find_table(&name).is_some() {
-                    println!("Error: Table '{}' already exists", name);
-                    continue;
-                }
-                
-                // Create a new table in the database
-                let table = engine::Table {
-                    name: name.clone(),
-                    columns: columns.clone(),
-                    rows: Vec::new(),
-                };
-                
-                match db.save_table(&table, true) {
-                    Ok(_) => {
-                        // Add to in-memory catalog
-                        catalog.add_table(table);
-                        println!("Table '{}' created successfully", name);
-                    }
+                match query_engine.execute_create_table(name.clone(), columns) {
+                    Ok(_) => println!("Table '{}' created successfully", name),
                     Err(e) => println!("Error: {}", e),
                 }
             }
             Command::Insert { table, values } => {
-                if let Some(table_data) = catalog.find_table_mut(&table) {
-                    // Validate column count
-                    if values.len() != table_data.columns.len() {
-                        println!("Error: Column count mismatch: expected {}, got {}", 
-                                table_data.columns.len(), values.len());
-                        continue;
-                    }
-                    
-                    // Create a new row and add it to the table
-                    let row = engine::Row { values: values.clone() };
-                    table_data.rows.push(row);
-                    
-                    // Save the updated table
-                    match db.update_table_data(table_data) {
-                        Ok(_) => println!("Inserted 1 row into '{}'", table),
-                        Err(e) => println!("Error: {}", e),
-                    }
-                } else {
-                    println!("Table '{}' not found", table);
+                match query_engine.execute_insert(table.clone(), values) {
+                    Ok(_) => println!("Inserted 1 row into '{}'", table),
+                    Err(e) => println!("Error: {}", e),
                 }
             }
-            Command::Select { table, columns: _ } => {
-                if let Some(table_data) = catalog.find_table(&table) {
-                    if table_data.rows.is_empty() {
-                        println!("No rows found in '{}'", table);
-                    } else {
-                        // Print header
-                        let header: Vec<String> = table_data
-                            .columns
-                            .iter()
-                            .map(|c| format!("{} ({})", c.name, c.data_type))
-                            .collect();
-                        println!("{}", header.join(" | "));
-                        println!("{}", "-".repeat(header.join(" | ").len()));
+            Command::Select { table, columns, where_clause } => {
+                match query_engine.execute_select(table.clone(), columns, where_clause) {
+                    Ok((cols, rows)) => {
+                        if rows.is_empty() {
+                            println!("No rows found in '{}'", table);
+                        } else {
+                            // Print header
+                            println!("{}", cols.join(" | "));
+                            println!("{}", "-".repeat(cols.join(" | ").len()));
 
-                        // Print rows
-                        for row in &table_data.rows {
-                            println!("{}", row.values.join(" | "));
+                            // Print rows
+                            for row in &rows {
+                                println!("{}", row.values.join(" | "));
+                            }
+                        }
+                    }
+                    Err(e) => println!("Error: {}", e),
+                }
+            }
+            Command::ShowTables => {
+                if let Some(schema) = query_engine.get_table_schema("tables") {
+                    if schema.rows.is_empty() {
+                        println!("No tables in database");
+                    } else {
+                        println!("Tables:");
+                        for row in &schema.rows {
+                            println!("- {}", row.values.join(" | "));
                         }
                     }
                 } else {
-                    println!("Table '{}' not found", table);
-                }
-            }
-
-            Command::ShowTables => {
-                let tables = catalog.list_tables();
-                if tables.is_empty() {
-                    println!("No tables in database");
-                } else {
-                    println!("Tables:");
-                    for table in tables {
-                        println!("- {}", table);
+                    let tables = query_engine.get_all_tables();
+                    if tables.is_empty() {
+                        println!("No tables in database");
+                    } else {
+                        println!("Tables:");
+                        for table in tables {
+                            println!("- {}", table.name);
+                        }
                     }
                 }
             }
             
             Command::InspectTable { name } => {
-                if let Some(table) = catalog.find_table(&name) {
+                if let Some(table) = query_engine.get_table_schema(&name) {
                     println!("Table: {}", name);
                     println!("----------------");
                     println!("{:<20} | {}", "Column", "Type");
@@ -178,6 +136,7 @@ fn print_help() {
     println!("  CREATE TABLE <table_name> (col1 TYPE, col2 TYPE, ...) - Create a new table");
     println!("  INSERT INTO <table_name> VALUES (val1, val2, ...) - Insert data into a table");
     println!("  SELECT * FROM <table_name> - Query data from a table");
+    println!("  SELECT * FROM <table_name> WHERE <column> = <value> - Query data with a where clause");
     println!("  INSPECT <table_name> - Show table schema and column types");
     println!("  SHOW TABLES - List all tables in the database");
     println!("  help - Show this help message");

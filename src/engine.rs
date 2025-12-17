@@ -1,4 +1,4 @@
-use crate::parser::Column;
+use crate::parser::{Column, WhereClause};
 
 #[derive(Debug, Clone)]
 pub struct Table {
@@ -130,16 +130,61 @@ impl QueryEngine {
         Ok(())
     }
 
-    pub fn execute_select(&self, table: String) -> Result<Vec<Row>, String> {
+    pub fn execute_select(&self, table_name: String, columns: Vec<String>, where_clause: Option<WhereClause>) -> Result<(Vec<String>, Vec<Row>), String> {
         let table = self
             .catalog
-            .find_table(&table)
-            .ok_or_else(|| format!("Table '{}' does not exist", table))?;
+            .find_table(&table_name)
+            .ok_or_else(|| format!("Table '{}' does not exist", table_name))?;
 
-        Ok(table.rows.clone())
+        let mut rows = table.rows.clone();
+
+        if let Some(clause) = where_clause {
+            let column_index = table.columns.iter().position(|c| c.name.to_lowercase() == clause.column.to_lowercase());
+
+            if let Some(index) = column_index {
+                rows = rows.into_iter().filter(|row| {
+                    if let Some(value) = row.values.get(index) {
+                        // For now, only support '=' operator
+                        if clause.operator == "=" {
+                            return value.to_lowercase() == clause.value.to_lowercase();
+                        }
+                    }
+                    false
+                }).collect();
+            } else {
+                return Err(format!("Column '{}' not found in table '{}'", clause.column, table.name));
+            }
+        }
+
+        let selected_columns;
+        let final_rows;
+
+        if columns.contains(&"*".to_string()) {
+            selected_columns = table.columns.iter().map(|c| c.name.clone()).collect();
+            final_rows = rows;
+        } else {
+            let column_indices: Vec<usize> = columns.iter().map(|col_name| {
+                table.columns.iter().position(|c| c.name.to_lowercase() == col_name.to_lowercase())
+            }).collect::<Option<Vec<usize>>>().ok_or("One or more columns not found")?;
+
+            selected_columns = columns.clone();
+
+            final_rows = rows.into_iter().map(|row| {
+                let selected_values = column_indices.iter().map(|&index| {
+                    row.values.get(index).cloned().unwrap_or_default()
+                }).collect();
+                Row { values: selected_values }
+            }).collect();
+        }
+
+        Ok((selected_columns, final_rows))
     }
 
     pub fn get_table_schema(&self, table: &str) -> Option<&Table> {
         self.catalog.find_table(table)
+    }
+
+    pub fn get_all_tables(&self) -> &Vec<Table> {
+        self.catalog.get_all_tables()
     }
 }

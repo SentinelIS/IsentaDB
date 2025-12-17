@@ -1,3 +1,10 @@
+#[derive(Debug, PartialEq, Clone)]
+pub struct WhereClause {
+    pub column: String,
+    pub operator: String,
+    pub value: String,
+}
+
 #[derive(Debug, PartialEq)]
 pub enum Command {
     CreateTable {
@@ -10,7 +17,8 @@ pub enum Command {
     },
     Select {
         table: String,
-        columns: Vec<String>, // For now, just support *
+        columns: Vec<String>,
+        where_clause: Option<WhereClause>,
     },
     ShowTables,
     InspectTable {
@@ -126,7 +134,7 @@ impl Parser {
     }
 
     fn parse_select(&self, input: &str) -> Command {
-        // Format: SELECT * FROM table
+        // Format: SELECT col1, col2 FROM table WHERE col = val
         let input_upper = input.to_uppercase();
         if !input_upper.starts_with("SELECT") {
             return Command::Unknown(input.to_string());
@@ -138,12 +146,36 @@ impl Parser {
             Some(pos) => pos,
             None => return Command::Unknown(input.to_string()),
         };
-        
-        let after_from = &after_select[from_pos_original + 4..].trim_start();
-        let columns_str = after_select[..from_pos_original].trim();
-        let table_name = after_from.to_string();
 
-        // Parse columns (for now, just support *)
+        let columns_str = after_select[..from_pos_original].trim();
+        let after_from = &after_select[from_pos_original + 4..].trim_start();
+
+        // Find WHERE keyword position (case-insensitive)
+        let where_pos_original = after_from.to_uppercase().find("WHERE");
+
+        let (table_name, where_clause) = if let Some(where_pos) = where_pos_original {
+            let table_part = &after_from[..where_pos].trim();
+            let where_part = &after_from[where_pos + 5..].trim(); // Skip "WHERE"
+
+            // Parse WHERE clause: "column = value"
+            let where_parts: Vec<&str> = where_part.split('=').map(|s| s.trim()).collect();
+            if where_parts.len() == 2 {
+                let clause = WhereClause {
+                    column: where_parts[0].to_string(),
+                    operator: "=".to_string(),
+                    value: where_parts[1].trim_matches('\'').trim_matches('"').to_string(),
+                };
+                (table_part.to_string(), Some(clause))
+            } else {
+                // Invalid WHERE clause format
+                (table_part.to_string(), None)
+            }
+        } else {
+            // No WHERE clause
+            (after_from.to_string(), None)
+        };
+
+        // Parse columns
         let columns: Vec<String> = if columns_str == "*" {
             vec!["*".to_string()]
         } else {
@@ -156,6 +188,7 @@ impl Parser {
         Command::Select {
             table: table_name,
             columns,
+            where_clause,
         }
     }
 
