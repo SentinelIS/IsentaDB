@@ -623,23 +623,40 @@ impl Database {
             // Find the last table in the chain and update its next pointer
             let mut current_page_id = schema_root;
             loop {
-                let current_page = self.storage.read_page(current_page_id);
-                let next_page = u64::from_le_bytes(
-                    current_page.data[current_page.data.len() - 8..]
-                        .try_into()
-                        .map_err(|_| "Failed to read next page ID")?,
-                );
-
-                if next_page == 0 {
-                    // Found the last table, update its next pointer
-                    let mut last_page = current_page;
-                    let offset = last_page.data.len() - 8;
-                    last_page.data[offset..offset + 8]
-                        .copy_from_slice(&schema_page.id.to_le_bytes());
-                    self.storage.write_page(&last_page);
+                let mut current_page = self.storage.read_page(current_page_id);
+    
+                // Parse the current page to find the offset of the next_page pointer
+                let mut next_page_offset = 0;
+    
+                // Read table name
+                let name_len = u32::from_le_bytes(current_page.data[next_page_offset..next_page_offset + 4].try_into().unwrap()) as usize;
+                next_page_offset += 4 + name_len;
+    
+                // Read columns
+                let num_cols = u32::from_le_bytes(current_page.data[next_page_offset..next_page_offset + 4].try_into().unwrap());
+                next_page_offset += 4;
+    
+                for _ in 0..num_cols {
+                    let col_name_len = u32::from_le_bytes(current_page.data[next_page_offset..next_page_offset + 4].try_into().unwrap()) as usize;
+                    next_page_offset += 4 + col_name_len;
+    
+                    let type_len = u32::from_le_bytes(current_page.data[next_page_offset..next_page_offset + 4].try_into().unwrap()) as usize;
+                    next_page_offset += 4 + type_len;
+                }
+    
+                // Read data page ID
+                next_page_offset += 8;
+    
+                // Now, next_page_offset is at the location of the next_page pointer
+                let next_page_id = u64::from_le_bytes(current_page.data[next_page_offset..next_page_offset + 8].try_into().unwrap());
+    
+                if next_page_id == 0 {
+                    // This is the last page, update its next pointer
+                    current_page.data[next_page_offset..next_page_offset + 8].copy_from_slice(&schema_page.id.to_le_bytes());
+                    self.storage.write_page(&current_page);
                     break;
                 }
-                current_page_id = next_page;
+                current_page_id = next_page_id;
             }
         }
 
