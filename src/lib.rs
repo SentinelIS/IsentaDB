@@ -89,17 +89,17 @@ pub fn execute_line(input: &str, query_engine: &mut QueryEngine, parser: &Parser
             } else {
                 let mut output = "Tables:\n".to_string();
                 for table in tables {
-                    output.push_str(&format!("- {}\\n", table.name));
+                    output.push_str(&format!("- {}\n", table.name));
                 }
                 output.trim_end().to_string()
             }
         }
         Command::InspectTable { name } => {
             if let Some(table) = query_engine.get_table_schema(&name) {
-                let mut output = format!("Table: {}\\n", name);
+                let mut output = format!("Table: {}\n", name);
                 output.push_str("----------------\n");
                 output.push_str(&format!("{:<20} | {}\n", "Column", "Type"));
-                output.push_str(&format!("{:-<20}-+-{:-<15}\\n", "", ""));
+                output.push_str(&format!("{:-<20}-+-{:-<15}\n", "", ""));
                 
                 for column in &table.columns {
                     output.push_str(&format!("{:<20} | {}\n", column.name, column.data_type));
