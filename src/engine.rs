@@ -163,9 +163,14 @@ impl QueryEngine {
             selected_columns = table.columns.iter().map(|c| c.name.clone()).collect();
             final_rows = rows;
         } else {
-            let column_indices: Vec<usize> = columns.iter().map(|col_name| {
-                table.columns.iter().position(|c| c.name.to_lowercase() == col_name.to_lowercase())
-            }).collect::<Option<Vec<usize>>>().ok_or("One or more columns not found")?;
+            // Find indices for each requested column, returning a specific error for any not found.
+            let mut column_indices = Vec::new();
+            for col_name in &columns {
+                match table.columns.iter().position(|c| c.name.to_lowercase() == col_name.to_lowercase()) {
+                    Some(index) => column_indices.push(index),
+                    None => return Err(format!("Column '{}' not found in table '{}'", col_name, table.name)),
+                }
+            }
 
             selected_columns = columns.clone();
 
