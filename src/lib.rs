@@ -109,6 +109,12 @@ pub fn execute_line(input: &str, query_engine: &mut QueryEngine, parser: &Parser
                 format!("Table '{}' not found", name)
             }
         }
+        Command::Update { table, set_column, set_value, where_clause } => {
+            match query_engine.execute_update(table.clone(), (set_column, set_value), where_clause) {
+                Ok(count) => format!("Updated {} rows in '{}'", count, table),
+                Err(e) => format!("Error: {}", e),
+            }
+        }
         Command::Unknown(cmd) => {
             format!("Unknown command: {}\nType 'help' for available commands", cmd)
         }
@@ -124,6 +130,7 @@ fn print_help() -> String {
     "  INSERT INTO <table_name> VALUES (val1, val2, ...) - Insert data into a table\n" +
     "  SELECT * FROM <table_name> - Query data from a table\n" +
     "  SELECT * FROM <table_name> WHERE <column> = <value> - Query data with a where clause\n" +
+    "  UPDATE <table_name> SET <column> = <value> WHERE <column> = <value> - Update data in a table\n" +
     "  INSPECT <table_name> - Show table schema and column types\n" +
     "  SHOW TABLES - List all tables in the database\n" +
     "  help - Show this help message\n" +

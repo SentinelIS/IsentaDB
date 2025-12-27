@@ -20,6 +20,12 @@ pub enum Command {
         columns: Vec<String>,
         where_clause: Option<WhereClause>,
     },
+    Update {
+        table: String,
+        set_column: String,
+        set_value: String,
+        where_clause: Option<WhereClause>,
+    },
     ShowTables,
     InspectTable {
         name: String,
@@ -50,12 +56,29 @@ impl Parser {
             self.parse_insert(input)
         } else if input_upper.starts_with("SELECT") {
             self.parse_select(input)
+        } else if input_upper.starts_with("UPDATE") {
+            self.parse_update(input)
         } else if input_upper.starts_with("SHOW TABLES") {
             Command::ShowTables
         } else if input_upper.starts_with("INSPECT") {
             self.parse_inspect(input)
         } else {
             Command::Unknown(input.to_string())
+        }
+    }
+
+    /// Parses a simple "col = val" WHERE clause from a string slice.
+    fn parse_where_clause(&self, where_str: &str) -> Option<WhereClause> {
+        // For now, only supports a single "column = value" condition.
+        let parts: Vec<&str> = where_str.split('=').map(|s| s.trim()).collect();
+        if parts.len() == 2 {
+            Some(WhereClause {
+                column: parts[0].to_string(),
+                operator: "=".to_string(),
+                value: parts[1].trim_matches('"').trim_matches('"').to_string(),
+            })
+        } else {
+            None // Invalid or unsupported WHERE clause format
         }
     }
 
@@ -111,7 +134,6 @@ impl Parser {
             return Command::Unknown(input.to_string());
         }
 
-        // Find VALUES keyword position (case-insensitive) in original input
         let after_insert = &input[11..].trim_start(); // Skip "INSERT INTO" (11 chars)
         let values_pos_original = match after_insert.to_uppercase().find("VALUES") {
             Some(pos) => pos,
@@ -121,10 +143,9 @@ impl Parser {
         let table_name = after_insert[..values_pos_original].trim().to_string();
         let values_str = after_insert[values_pos_original + 6..].trim().trim_start_matches('(').trim_end_matches(')');
 
-        // Parse values - simple split by comma
         let values: Vec<String> = values_str
             .split(',')
-            .map(|v| v.trim().trim_matches('\'').trim_matches('"').to_string())
+            .map(|v| v.trim().trim_matches('"').trim_matches('"').to_string())
             .collect();
 
         Command::Insert {
@@ -136,46 +157,28 @@ impl Parser {
     fn parse_select(&self, input: &str) -> Command {
         // Format: SELECT col1, col2 FROM table WHERE col = val
         let input_upper = input.to_uppercase();
-        if !input_upper.starts_with("SELECT") {
-            return Command::Unknown(input.to_string());
-        }
+        let after_select = &input[6..].trim_start(); // Skip "SELECT "
+        let after_select_upper = &input_upper[6..].trim_start();
 
-        // Find FROM keyword position (case-insensitive) in original input
-        let after_select = &input[6..].trim_start(); // Skip "SELECT" (6 chars)
-        let from_pos_original = match after_select.to_uppercase().find("FROM") {
+        let from_pos = match after_select_upper.find("FROM ") {
             Some(pos) => pos,
             None => return Command::Unknown(input.to_string()),
         };
 
-        let columns_str = after_select[..from_pos_original].trim();
-        let after_from = &after_select[from_pos_original + 4..].trim_start();
+        let columns_str = after_select[..from_pos].trim();
+        let after_from = &after_select[from_pos + 5..].trim_start(); // Skip "FROM "
+        let after_from_upper = &after_select_upper[from_pos + 5..].trim_start();
 
-        // Find WHERE keyword position (case-insensitive)
-        let where_pos_original = after_from.to_uppercase().find("WHERE");
+        let where_pos = after_from_upper.find("WHERE ");
 
-        let (table_name, where_clause) = if let Some(where_pos) = where_pos_original {
-            let table_part = &after_from[..where_pos].trim();
-            let where_part = &after_from[where_pos + 5..].trim(); // Skip "WHERE"
-
-            // Parse WHERE clause: "column = value"
-            let where_parts: Vec<&str> = where_part.split('=').map(|s| s.trim()).collect();
-            if where_parts.len() == 2 {
-                let clause = WhereClause {
-                    column: where_parts[0].to_string(),
-                    operator: "=".to_string(),
-                    value: where_parts[1].trim_matches('\'').trim_matches('"').to_string(),
-                };
-                (table_part.to_string(), Some(clause))
-            } else {
-                // Invalid WHERE clause format
-                (table_part.to_string(), None)
-            }
+        let (table_name, where_clause) = if let Some(pos) = where_pos {
+            let table_part = &after_from[..pos].trim();
+            let where_part = &after_from[pos + 6..].trim(); // Skip "WHERE "
+            (table_part.to_string(), self.parse_where_clause(where_part))
         } else {
-            // No WHERE clause
             (after_from.to_string(), None)
         };
 
-        // Parse columns
         let columns: Vec<String> = if columns_str == "*" {
             vec!["*".to_string()]
         } else {
@@ -188,6 +191,50 @@ impl Parser {
         Command::Select {
             table: table_name,
             columns,
+            where_clause,
+        }
+    }
+
+    fn parse_update(&self, input: &str) -> Command {
+        // Format: UPDATE table SET col = val WHERE other_col = other_val
+        let input_upper = input.to_uppercase();
+    
+        let set_pos = match input_upper.find(" SET ") {
+            Some(pos) => pos,
+            None => return Command::Unknown(input.to_string()),
+        };
+    
+        // "UPDATE ".len() is 7
+        let table_name = input[7..set_pos].trim().to_string();
+        // " SET ".len() is 5
+        let after_set = &input[set_pos + 5..];
+        let after_set_upper = &input_upper[set_pos + 5..];
+    
+        let where_pos = after_set_upper.find(" WHERE ");
+    
+        let (set_part, where_clause) = if let Some(pos) = where_pos {
+            // " WHERE ".len() is 7
+            let where_part_str = &after_set[pos + 7..].trim();
+            (
+                after_set[..pos].trim(),
+                self.parse_where_clause(where_part_str),
+            )
+        } else {
+            (after_set.trim(), None)
+        };
+    
+        // Parse SET part: "col = val"
+        let set_parts: Vec<&str> = set_part.split('=').map(|s| s.trim()).collect();
+        if set_parts.len() != 2 {
+            return Command::Unknown(format!("Invalid SET clause: {}", set_part));
+        }
+        let set_column = set_parts[0].to_string();
+        let set_value = set_parts[1].trim_matches('"').trim_matches('"').to_string();
+    
+        Command::Update {
+            table: table_name,
+            set_column,
+            set_value,
             where_clause,
         }
     }

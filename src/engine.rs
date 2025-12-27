@@ -185,6 +185,58 @@ impl QueryEngine {
         Ok((selected_columns, final_rows))
     }
 
+    pub fn execute_update(&mut self, table_name: String, set_clause: (String, String), where_clause: Option<WhereClause>) -> Result<usize, String> {
+        let table = self
+            .catalog
+            .find_table_mut(&table_name)
+            .ok_or_else(|| format!("Table '{}' does not exist", table_name))?;
+
+        let (column_to_set, new_value) = set_clause;
+
+        let column_to_set_index = table.columns.iter().position(|c| c.name.to_lowercase() == column_to_set.to_lowercase());
+
+        let set_col_idx = match column_to_set_index {
+            Some(index) => index,
+            None => return Err(format!("Column '{}' not found in table '{}'", column_to_set, table.name)),
+        };
+
+        let mut updated_count = 0;
+
+        // If there's a WHERE clause, filter by it. Otherwise, update all rows.
+        if let Some(clause) = where_clause {
+            let where_column_index = table.columns.iter().position(|c| c.name.to_lowercase() == clause.column.to_lowercase());
+
+            if let Some(where_idx) = where_column_index {
+                for row in table.rows.iter_mut() {
+                    if let Some(value) = row.values.get(where_idx) {
+                        // For now, only support '=' operator
+                        if clause.operator == "=" && value.to_lowercase() == clause.value.to_lowercase() {
+                            if let Some(val_to_update) = row.values.get_mut(set_col_idx) {
+                                *val_to_update = new_value.clone();
+                                updated_count += 1;
+                            }
+                        }
+                    }
+                }
+            } else {
+                return Err(format!("Column '{}' not found in table '{}'", clause.column, table.name));
+            }
+        } else {
+            // No WHERE clause, update all rows
+            for row in table.rows.iter_mut() {
+                if let Some(val_to_update) = row.values.get_mut(set_col_idx) {
+                    *val_to_update = new_value.clone();
+                    updated_count += 1;
+                }
+            }
+        }
+        
+        let table_clone = table.clone();
+        self.database.update_table_data(&table_clone)?;
+
+        Ok(updated_count)
+    }
+
     pub fn get_table_schema(&self, table: &str) -> Option<&Table> {
         self.catalog.find_table(table)
     }
