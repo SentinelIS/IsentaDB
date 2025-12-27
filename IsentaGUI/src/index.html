@@ -8,18 +8,26 @@
     <script type="module" src="main.js" defer></script>
 </head>
 <body>
-    <div class="container">
-        <h1>IsentaDB</h1>
-        <p>A simple GUI to interact with the IsentaDB server.</p>
-
-        <div class="query-area">
-            <textarea id="query-input" rows="5" placeholder="Enter your SQL query... e.g., SHOW TABLES"></textarea>
-            <button id="submit-query">Execute Query</button>
+    <div class="main-container">
+        <div class="sidebar">
+            <h2 class="sidebar-title">Schema</h2>
+            <div id="schema-container">
+                <!-- Schema information will be loaded here -->
+            </div>
+            <button id="refresh-schema">Refresh</button>
         </div>
-
-        <div class="result-area">
-            <h2>Result</h2>
-            <pre id="query-result">The query result will appear here.</pre>
+        <div class="content-container">
+            <div class="query-editor-container">
+                <div class="toolbar">
+                    <button id="submit-query">Execute</button>
+                </div>
+                <textarea id="query-input" placeholder="Enter your SQL query... e.g., SHOW TABLES"></textarea>
+            </div>
+            <div class="result-container">
+                <div id="query-result">
+                    <p class="placeholder-text">The query result will appear here.</p>
+                </div>
+            </div>
         </div>
     </div>
 </body>
