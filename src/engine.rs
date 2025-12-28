@@ -144,12 +144,14 @@ impl QueryEngine {
             if let Some(index) = column_index {
                 rows = rows.into_iter().filter(|row| {
                     if let Some(value) = row.values.get(index) {
-                        // For now, only support '=' operator
-                        if clause.operator == "=" {
-                            return value.to_lowercase() == clause.value.to_lowercase();
+                        match clause.operator.as_str() {
+                            "=" => value.to_lowercase() == clause.value.to_lowercase(),
+                            "!=" => value.to_lowercase() != clause.value.to_lowercase(),
+                            _ => false, // Unsupported operator
                         }
+                    } else {
+                        false
                     }
-                    false
                 }).collect();
             } else {
                 return Err(format!("Column '{}' not found in table '{}'", clause.column, table.name));
@@ -209,8 +211,13 @@ impl QueryEngine {
             if let Some(where_idx) = where_column_index {
                 for row in table.rows.iter_mut() {
                     if let Some(value) = row.values.get(where_idx) {
-                        // For now, only support '=' operator
-                        if clause.operator == "=" && value.to_lowercase() == clause.value.to_lowercase() {
+                        let condition = match clause.operator.as_str() {
+                            "=" => value.to_lowercase() == clause.value.to_lowercase(),
+                            "!=" => value.to_lowercase() != clause.value.to_lowercase(),
+                            _ => false, // Unsupported operator
+                        };
+
+                        if condition {
                             if let Some(val_to_update) = row.values.get_mut(set_col_idx) {
                                 *val_to_update = new_value.clone();
                                 updated_count += 1;

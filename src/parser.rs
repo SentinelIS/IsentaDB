@@ -67,15 +67,22 @@ impl Parser {
         }
     }
 
-    /// Parses a simple "col = val" WHERE clause from a string slice.
+    /// Parses a simple "col = val" or "col != val" WHERE clause.
     fn parse_where_clause(&self, where_str: &str) -> Option<WhereClause> {
-        // For now, only supports a single "column = value" condition.
-        let parts: Vec<&str> = where_str.split('=').map(|s| s.trim()).collect();
+        let operator = if where_str.contains("!=") {
+            "!="
+        } else if where_str.contains('=') {
+            "="
+        } else {
+            return None; // No supported operator found
+        };
+
+        let parts: Vec<&str> = where_str.splitn(2, operator).map(|s| s.trim()).collect();
         if parts.len() == 2 {
             Some(WhereClause {
                 column: parts[0].to_string(),
-                operator: "=".to_string(),
-                value: parts[1].trim_matches('"').trim_matches('"').to_string(),
+                operator: operator.to_string(),
+                value: parts[1].trim_matches('"').trim_matches('\'').to_string(),
             })
         } else {
             None // Invalid or unsupported WHERE clause format
