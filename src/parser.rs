@@ -67,10 +67,18 @@ impl Parser {
         }
     }
 
-    /// Parses a simple "col = val" or "col != val" WHERE clause.
+    /// Parses a simple WHERE clause with operators =, !=, <, >, <=, >=.
     fn parse_where_clause(&self, where_str: &str) -> Option<WhereClause> {
-        let operator = if where_str.contains("!=") {
+        let operator = if where_str.contains("<=") {
+            "<="
+        } else if where_str.contains(">=") {
+            ">="
+        } else if where_str.contains("!=") {
             "!="
+        } else if where_str.contains('<') {
+            "<"
+        } else if where_str.contains('>') {
+            ">"
         } else if where_str.contains('=') {
             "="
         } else {

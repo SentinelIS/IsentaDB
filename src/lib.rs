@@ -129,8 +129,8 @@ fn print_help() -> String {
     "  CREATE TABLE <table_name> (col1 TYPE, col2 TYPE, ...) - Create a new table\n" +
     "  INSERT INTO <table_name> VALUES (val1, val2, ...) - Insert data into a table\n" +
     "  SELECT * FROM <table_name> - Query data from a table\n" +
-    "  SELECT * FROM <table_name> WHERE <column> = <value> or <column> != <value> - Query data with a where clause\n" +
-    "  UPDATE <table_name> SET <column> = <value> WHERE <column> = <value> or <column> != <value> - Update data in a table\n" +
+    "  SELECT * FROM <table_name> WHERE <column> [=, !=, <, >, <=, >=] <value> - Query data with a where clause\n" +
+    "  UPDATE <table_name> SET <column> = <value> WHERE <column> [=, !=, <, >, <=, >=] <value> - Update data in a table\n" +
     "  INSPECT <table_name> - Show table schema and column types\n" +
     "  SHOW TABLES - List all tables in the database\n" +
     "  help - Show this help message\n" +

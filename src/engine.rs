@@ -95,6 +95,42 @@ impl QueryEngine {
         }
     }
 
+    fn evaluate_condition(
+        row_value: &str,
+        operator: &str,
+        clause_value: &str,
+        column_type: &str,
+    ) -> bool {
+        if column_type == "INTEGER" {
+            let row_val: Result<i64, _> = row_value.parse();
+            let clause_val: Result<i64, _> = clause_value.parse();
+
+            if let (Ok(row_val), Ok(clause_val)) = (row_val, clause_val) {
+                match operator {
+                    "=" => row_val == clause_val,
+                    "!=" => row_val != clause_val,
+                    ">" => row_val > clause_val,
+                    "<" => row_val < clause_val,
+                    ">=" => row_val >= clause_val,
+                    "<=" => row_val <= clause_val,
+                    _ => false,
+                }
+            } else {
+                false // Could not parse one of the values as an integer
+            }
+        } else {
+            // Default to TEXT comparison
+            let row_val_lower = row_value.to_lowercase();
+            let clause_val_lower = clause_value.to_lowercase();
+            match operator {
+                "=" => row_val_lower == clause_val_lower,
+                "!=" => row_val_lower != clause_val_lower,
+                // GT, LT etc. for text are not part of this implementation
+                _ => false,
+            }
+        }
+    }
+
     pub fn execute_create_table(&mut self, name: String, columns: Vec<Column>) -> Result<(), String> {
         self.catalog.create_table(name.clone(), columns.clone())?;
         
@@ -142,16 +178,12 @@ impl QueryEngine {
             let column_index = table.columns.iter().position(|c| c.name.to_lowercase() == clause.column.to_lowercase());
 
             if let Some(index) = column_index {
+                let column = &table.columns[index];
                 rows = rows.into_iter().filter(|row| {
                     if let Some(value) = row.values.get(index) {
-                        match clause.operator.as_str() {
-                            "=" => value.to_lowercase() == clause.value.to_lowercase(),
-                            "!=" => value.to_lowercase() != clause.value.to_lowercase(),
-                            _ => false, // Unsupported operator
-                        }
-                    } else {
-                        false
+                        return Self::evaluate_condition(value, &clause.operator, &clause.value, &column.data_type);
                     }
+                    false
                 }).collect();
             } else {
                 return Err(format!("Column '{}' not found in table '{}'", clause.column, table.name));
@@ -209,15 +241,10 @@ impl QueryEngine {
             let where_column_index = table.columns.iter().position(|c| c.name.to_lowercase() == clause.column.to_lowercase());
 
             if let Some(where_idx) = where_column_index {
+                let column = table.columns[where_idx].clone();
                 for row in table.rows.iter_mut() {
                     if let Some(value) = row.values.get(where_idx) {
-                        let condition = match clause.operator.as_str() {
-                            "=" => value.to_lowercase() == clause.value.to_lowercase(),
-                            "!=" => value.to_lowercase() != clause.value.to_lowercase(),
-                            _ => false, // Unsupported operator
-                        };
-
-                        if condition {
+                        if Self::evaluate_condition(value, &clause.operator, &clause.value, &column.data_type) {
                             if let Some(val_to_update) = row.values.get_mut(set_col_idx) {
                                 *val_to_update = new_value.clone();
                                 updated_count += 1;
