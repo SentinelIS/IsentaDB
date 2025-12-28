@@ -67,33 +67,50 @@ impl Parser {
         }
     }
 
-    /// Parses a simple WHERE clause with operators =, !=, <, >, <=, >=.
+    /// Parses a simple WHERE clause with operators =, !=, <, >, <=, >=, LIKE, and NOT LIKE.
     fn parse_where_clause(&self, where_str: &str) -> Option<WhereClause> {
-        let operator = if where_str.contains("<=") {
-            "<="
-        } else if where_str.contains(">=") {
-            ">="
-        } else if where_str.contains("!=") {
-            "!="
-        } else if where_str.contains('<') {
-            "<"
-        } else if where_str.contains('>') {
-            ">"
-        } else if where_str.contains('=') {
-            "="
+        let where_upper = where_str.to_uppercase();
+        let operator_str;
+        let operator_len;
+
+        if where_upper.contains("NOT LIKE") {
+            operator_str = "NOT LIKE";
+            operator_len = 8;
+        } else if where_upper.contains("LIKE") {
+            operator_str = "LIKE";
+            operator_len = 4;
+        } else if where_upper.contains("<=") {
+            operator_str = "<=";
+            operator_len = 2;
+        } else if where_upper.contains(">=") {
+            operator_str = ">=";
+            operator_len = 2;
+        } else if where_upper.contains("!=") {
+            operator_str = "!=";
+            operator_len = 2;
+        } else if where_upper.contains('<') {
+            operator_str = "<";
+            operator_len = 1;
+        } else if where_upper.contains('>') {
+            operator_str = ">";
+            operator_len = 1;
+        } else if where_upper.contains('=') {
+            operator_str = "=";
+            operator_len = 1;
         } else {
             return None; // No supported operator found
         };
 
-        let parts: Vec<&str> = where_str.splitn(2, operator).map(|s| s.trim()).collect();
-        if parts.len() == 2 {
+        if let Some(op_pos) = where_upper.find(operator_str) {
+            let column = where_str[..op_pos].trim().to_string();
+            let value = where_str[op_pos + operator_len..].trim().trim_matches('"').trim_matches('\'').to_string();
             Some(WhereClause {
-                column: parts[0].to_string(),
-                operator: operator.to_string(),
-                value: parts[1].trim_matches('"').trim_matches('\'').to_string(),
+                column,
+                operator: operator_str.to_string(),
+                value,
             })
         } else {
-            None // Invalid or unsupported WHERE clause format
+            None // Should not happen if we found the operator string
         }
     }
 

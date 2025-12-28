@@ -1,4 +1,5 @@
 use crate::parser::{Column, WhereClause};
+use regex::Regex;
 
 #[derive(Debug, Clone)]
 pub struct Table {
@@ -120,11 +121,25 @@ impl QueryEngine {
             }
         } else {
             // Default to TEXT comparison
-            let row_val_lower = row_value.to_lowercase();
-            let clause_val_lower = clause_value.to_lowercase();
             match operator {
-                "=" => row_val_lower == clause_val_lower,
-                "!=" => row_val_lower != clause_val_lower,
+                "=" => row_value.eq_ignore_ascii_case(clause_value),
+                "!=" => !row_value.eq_ignore_ascii_case(clause_value),
+                "LIKE" => {
+                    let pattern = clause_value.replace('%', ".*").replace('_', ".");
+                    let re = match Regex::new(&format!("(?i)^{}$", pattern)) {
+                        Ok(re) => re,
+                        Err(_) => return false, // Invalid regex pattern
+                    };
+                    re.is_match(row_value)
+                }
+                "NOT LIKE" => {
+                    let pattern = clause_value.replace('%', ".*").replace('_', ".");
+                    let re = match Regex::new(&format!("(?i)^{}$", pattern)) {
+                        Ok(re) => re,
+                        Err(_) => return false, // Invalid regex pattern
+                    };
+                    !re.is_match(row_value)
+                }
                 // GT, LT etc. for text are not part of this implementation
                 _ => false,
             }
